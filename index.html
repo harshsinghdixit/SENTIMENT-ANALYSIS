@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Audience Intelligence Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 25px 15px; color: #1a1a1a; }
+        .container { max-width: 1000px; margin: 0 auto; background: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+        h2 { font-size: 22px; font-weight: 600; margin-top: 0; margin-bottom: 20px; color: #111; }
+        h3 { font-size: 16px; font-weight: 600; margin-top: 25px; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+        
+        .controls-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; }
+        input[type="text"], input[type="number"], select { padding: 9px 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #fff; }
+        input[type="text"] { flex: 2; min-width: 260px; }
+        select { min-width: 130px; }
+        input[type="number"] { width: 110px; }
+        
+        button { padding: 9px 18px; background: #0969da; color: #ffffff; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
+        button:hover { background: #0451a5; }
+        
+        .badge-bar { margin-bottom: 15px; font-size: 13px; color: #57606a; background: #f6f8fa; padding: 8px 12px; border-radius: 6px; border: 1px solid #d0d7de; }
+        
+        /* Impact Legend */
+        .legend-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; background: #fafbfc; border: 1px solid #e1e4e8; padding: 10px 12px; border-radius: 6px; }
+        .legend-title { font-size: 12px; font-weight: 600; color: #57606a; width: 100%; margin-bottom: 4px; }
+        .legend-item { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
+        
+        .visualization-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-bottom: 20px; }
+        .chart-box { width: 320px; height: 320px; }
+        .bars-box { flex: 1; min-width: 280px; }
+        
+        .bar-container { display: flex; align-items: center; margin-bottom: 8px; }
+        .bar-label { width: 130px; font-weight: 500; text-transform: capitalize; font-size: 13px; color: #24292f; }
+        .bar-wrapper { flex: 1; background: #eaeef2; height: 14px; border-radius: 3px; overflow: hidden; margin: 0 10px; }
+        .bar-fill { height: 100%; background: #0969da; }
+        .bar-percent { width: 45px; text-align: right; font-size: 12px; color: #57606a; font-weight: 500; }
+        
+        .packet-card { background: #ffffff; border: 1px solid #d0d7de; border-left: 4px solid #0969da; padding: 12px 15px; border-radius: 6px; margin-bottom: 10px; }
+        .packet-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .author { font-weight: 600; color: #0969da; }
+        .meta-tag { background: #f6f8fa; border: 1px solid #d0d7de; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #57606a; }
+        .emotion-tag { background: #ddf4ff; color: #0969da; border: 1px solid #54aeff; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .impact-tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+        .comment-body { font-size: 13px; margin: 6px 0 8px 0; line-height: 1.45; color: #1f2328; }
+        .packet-footer { display: flex; gap: 16px; font-size: 12px; color: #57606a; border-top: 1px solid #f0f2f5; padding-top: 6px; }
+        
+        #loading { font-size: 14px; color: #57606a; padding: 15px 0; font-weight: 500; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>YouTube Audience Intelligence & Packet Analyzer</h2>
+    
+    <div class="controls-grid">
+        <input type="text" id="urlInput" placeholder="Paste YouTube URL or Video ID...">
+        
+        <select id="sortSelect">
+            <option value="top" selected>Top Comments</option>
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+        </select>
+
+        <select id="limitSelect" onchange="toggleCustomInput()">
+            <option value="10">10 Packets</option>
+            <option value="20" selected>20 Packets</option>
+            <option value="50">50 Packets</option>
+            <option value="100">100 Packets</option>
+            <option value="250">250 Packets</option>
+            <option value="500">500 Packets</option>
+            <option value="1000">1000 Packets</option>
+            <option value="-1">All Comments</option>
+            <option value="custom">Custom Count</option>
+        </select>
+
+        <input type="number" id="customInput" placeholder="Enter count" style="display:none;" min="1" max="5000">
+
+        <button onclick="runAnalysis()">Analyze Packets</button>
+    </div>
+
+    <div id="loading" style="display:none;">Fetching comment packets and running inference...</div>
+
+    <div id="dashboard" style="display:none;">
+        <div class="badge-bar" id="metaInfo"></div>
+        
+        <div class="legend-container">
+            <div class="legend-title">Conversation Impact Legend</div>
+            <span class="legend-item" style="background:#f3e8ff; color:#6f42c1; border: 1px solid #d8b4fe;">Very High Impact</span>
+            <span class="legend-item" style="background:#ddf4ff; color:#0969da; border: 1px solid #54aeff;">High Impact</span>
+            <span class="legend-item" style="background:#e6f7f8; color:#1b7c83; border: 1px solid #8fe3e8;">Moderate Impact</span>
+            <span class="legend-item" style="background:#f6f8fa; color:#57606a; border: 1px solid #d0d7de;">Low Impact</span>
+            <span class="legend-item" style="background:#f3f4f6; color:#8c959f; border: 1px solid #e5e7eb;">Very Low Impact</span>
+        </div>
+
+        <h3>Emotion Distribution Analysis</h3>
+        <div class="visualization-row">
+            <div class="chart-box">
+                <canvas id="emotionPieChart"></canvas>
+            </div>
+            <div class="bars-box" id="chartContainer"></div>
+        </div>
+        
+        <h3>Parsed Comment Packets</h3>
+        <div id="packetsContainer"></div>
+    </div>
+</div>
+
+<script>
+    let pieChartInstance = null;
+
+    function toggleCustomInput() {
+        const select = document.getElementById('limitSelect');
+        const customInput = document.getElementById('customInput');
+        customInput.style.display = (select.value === 'custom') ? 'inline-block' : 'none';
+    }
+
+    async function runAnalysis() {
+        const inputUrl = document.getElementById('urlInput').value.trim();
+        const sortOrder = document.getElementById('sortSelect').value;
+        const limitSelect = document.getElementById('limitSelect').value;
+        const customInput = document.getElementById('customInput').value;
+        const loading = document.getElementById('loading');
+        const dashboard = document.getElementById('dashboard');
+
+        if (!inputUrl) return alert("Please enter a valid YouTube URL or Video ID.");
+
+        let maxResults = parseInt(limitSelect, 10);
+        if (limitSelect === 'custom') {
+            maxResults = parseInt(customInput, 10);
+            if (isNaN(maxResults) || maxResults <= 0) return alert("Please enter a valid custom count.");
+        }
+
+        loading.style.display = 'block';
+        dashboard.style.display = 'none';
+
+        try {
+            const response = await fetch('/analyze-youtube', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ video_id: inputUrl, max_results: maxResults, sort_order: sortOrder })
+            });
+
+            const data = await response.json();
+            loading.style.display = 'none';
+
+            if (data.error) return alert("Error: " + data.error);
+
+            document.getElementById('metaInfo').innerText = 
+                `Video ID: ${data.video_id_analyzed} | Total Packets Analyzed: ${data.total_comments_analyzed} | Sorting Mode: ${data.sort_order_used.toUpperCase()}`;
+
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.innerHTML = '';
+            const labels = [];
+            const values = [];
+
+            for (const [emotion, pct] of Object.entries(data.chart_percentages)) {
+                labels.push(emotion);
+                values.push(pct);
+                chartContainer.innerHTML += `
+                    <div class="bar-container">
+                        <div class="bar-label">${emotion}</div>
+                        <div class="bar-wrapper"><div class="bar-fill" style="width:${pct}%;"></div></div>
+                        <div class="bar-percent">${pct}%</div>
+                    </div>`;
+            }
+
+            renderPieChart(labels, values);
+
+            const packetsContainer = document.getElementById('packetsContainer');
+            packetsContainer.innerHTML = '';
+            data.packets.forEach((p) => {
+                const pubDate = new Date(p.published_at).toLocaleString();
+                packetsContainer.innerHTML += `
+                    <div class="packet-card">
+                        <div class="packet-header">
+                            <span class="author">${escapeHtml(p.author_name)}</span>
+                            <div>
+                                <span class="meta-tag">Lang: ${p.demographics.language}</span>
+                                <span class="emotion-tag">${p.emotion} (${(p.confidence*100).toFixed(0)}%)</span>
+                                <span class="impact-tag" style="background:${p.impact.bg}; color:${p.impact.color}; border: 1px solid ${p.impact.color}40;">${p.impact.level}</span>
+                            </div>
+                        </div>
+                        <p class="comment-body">${escapeHtml(p.comment_text)}</p>
+                        <div class="packet-footer">
+                            <span>Likes: ${p.like_count}</span>
+                            <span>Replies: ${p.reply_count}</span>
+                            <span>Published: ${pubDate}</span>
+                        </div>
+                    </div>`;
+            });
+
+            dashboard.style.display = 'block';
+        } catch (err) {
+            loading.style.display = 'none';
+            alert("Analysis failed: " + err);
+        }
+    }
+
+    function renderPieChart(labels, dataValues) {
+        const ctx = document.getElementById('emotionPieChart').getContext('2d');
+        if (pieChartInstance) {
+            pieChartInstance.destroy();
+        }
+        pieChartInstance = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: [
+                        '#0969da', '#2da44e', '#8250df', '#cf222e', '#bf3989',
+                        '#d4a72c', '#1b7c83', '#6e7781', '#634c9f', '#0969da'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                }
+            }
+        });
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+</script>
+
+</body>
+</html>

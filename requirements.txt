@@ -1,0 +1,9 @@
+Flask
+flask-cors
+transformers
+torch
+google-api-python-client
+python-dotenv
+langdetect
+easygoogletranslate
+gunicorn
